@@ -18,6 +18,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/juju/loggo"
 	"github.com/juju/os"
+	"github.com/juju/proxy"
 	"github.com/juju/utils/featureflag"
 	"github.com/juju/version"
 	"gopkg.in/juju/names.v2"
@@ -440,6 +441,24 @@ func (w *unixConfigure) addDownloadToolsCmds() error {
 			curlCommand += " --retry 10"
 			if w.icfg.DisableSSLHostnameVerification {
 				curlCommand += " --insecure"
+			}
+
+			var proxySettings proxy.Settings
+			if w.icfg.JujuProxySettings.HasProxySet() {
+				proxySettings = w.icfg.JujuProxySettings
+			} else if w.icfg.LegacyProxySettings.HasProxySet() {
+				proxySettings = w.icfg.LegacyProxySettings
+			}
+			if strings.HasPrefix(tools.URL, httpSchemePrefix) {
+				proxyUrl := proxySettings.Http
+				curlCommand += fmt.Sprintf(" --proxy %s", proxyUrl)
+			} else if strings.HasPrefix(tools.URL, httpsSchemePrefix) {
+				proxyUrl := proxySettings.Https
+				// curl automatically uses HTTP CONNECT for URLs containing HTTPS
+				curlCommand += fmt.Sprintf(" --proxy %s", proxyUrl)
+			}
+			if proxySettings.NoProxy != "" {
+				curlCommand += fmt.Sprintf(" --noproxy %s", proxySettings.NoProxy)
 			}
 		} else {
 			// Allow up to 20 seconds for curl to make a connection. This prevents
